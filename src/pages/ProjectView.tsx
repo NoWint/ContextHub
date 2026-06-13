@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useAppStore } from "../lib/store";
 import { FileTree } from "../components/FileTree";
 import { Button } from "@/components/ui/button";
@@ -20,12 +21,13 @@ import {
   Download,
   BarChart3,
   Loader2,
+  GitCompare,
 } from "lucide-react";
 
 export function ProjectView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { projects, currentProject, selectProject, files, analysis, analyzeProject, loadProjectData, loadingAnalysis } = useAppStore();
+  const { projects, currentProject, selectProject, files, analysis, analyzeProject, loadProjectData, loadingAnalysis, startWatching, stopWatching, ingestProject } = useAppStore();
 
   useEffect(() => {
     if (!id) return;
@@ -37,6 +39,24 @@ export function ProjectView() {
       }
     }
   }, [id]);
+
+  // File watching effect
+  useEffect(() => {
+    if (!currentProject) return;
+
+    startWatching(currentProject.id);
+
+    const unlistenPromise = listen<string>("project-files-changed", (event) => {
+      if (event.payload === currentProject.id) {
+        ingestProject({ LocalFolder: { path: currentProject.source_path } });
+      }
+    });
+
+    return () => {
+      stopWatching(currentProject.id);
+      unlistenPromise.then((fn) => fn());
+    };
+  }, [currentProject?.id]);
 
   if (!currentProject) {
     return (
@@ -156,6 +176,15 @@ export function ProjectView() {
               >
                 <Download className="h-4 w-4" />
                 Export Context
+                <ArrowRight className="h-3.5 w-3.5 ml-auto" />
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/project/${id}/diff`)}
+                className="w-full justify-start gap-2 h-11"
+              >
+                <GitCompare className="h-4 w-4" />
+                Compare Versions
                 <ArrowRight className="h-3.5 w-3.5 ml-auto" />
               </Button>
             </CardContent>

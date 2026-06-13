@@ -111,3 +111,37 @@ pub fn get_project_analysis(state: State<'_, AppState>, project_id: String) -> R
         Err(e) => Err(e.to_string()),
     }
 }
+
+#[tauri::command]
+pub fn get_startup_path(state: State<'_, AppState>) -> Option<String> {
+    state.startup_path.lock().unwrap().clone()
+}
+
+#[tauri::command]
+pub fn get_analysis_history(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<Vec<Analysis>, String> {
+    let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, project_id, version, overview, architecture, decisions, dependencies, api_endpoints, created_at FROM analyses WHERE project_id = ?1 ORDER BY version DESC")
+        .map_err(|e| e.to_string())?;
+    let analyses = stmt
+        .query_map([&project_id], |row| {
+            Ok(Analysis {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                version: row.get(2)?,
+                overview: row.get(3)?,
+                architecture: row.get(4)?,
+                decisions: row.get(5)?,
+                dependencies: row.get(6)?,
+                api_endpoints: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(analyses)
+}

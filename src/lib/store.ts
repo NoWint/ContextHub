@@ -45,6 +45,8 @@ interface AppState {
   ) => Promise<void>;
   deleteLlmConfig: (configId: string) => Promise<void>;
   loadProjectData: (projectId: string) => Promise<void>;
+  startWatching: (projectId: string) => Promise<void>;
+  stopWatching: (projectId: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -196,6 +198,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ files, analysis, loadingProjects: false });
     } catch (e) {
       set({ error: String(e), loadingProjects: false });
+    }
+  },
+
+  startWatching: async (projectId) => {
+    try {
+      await api.watcher.start(projectId);
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  stopWatching: async (projectId) => {
+    try {
+      await api.watcher.stop(projectId);
+    } catch (e) {
+      set({ error: String(e) });
     }
   },
 

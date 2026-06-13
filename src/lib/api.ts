@@ -77,6 +77,9 @@ export const api = {
       invoke("get_project_files", { projectId }),
     getAnalysis: (projectId: string): Promise<Analysis | null> =>
       invoke("get_project_analysis", { projectId }),
+    getAnalysisHistory: (projectId: string): Promise<Analysis[]> =>
+      invoke("get_analysis_history", { projectId }),
+    getStartupPath: (): Promise<string | null> => invoke("get_startup_path"),
   },
   ingestion: {
     ingest: (projectId: string, source: ProjectSource): Promise<FileEntry[]> =>
@@ -111,5 +114,11 @@ export const api = {
     listLlmConfigs: (): Promise<LlmConfig[]> => invoke("list_llm_configs"),
     deleteLlmConfig: (configId: string): Promise<void> =>
       invoke("delete_llm_config", { configId }),
+  },
+  watcher: {
+    start: (projectId: string): Promise<void> =>
+      invoke("start_watching", { projectId }),
+    stop: (projectId: string): Promise<void> =>
+      invoke("stop_watching", { projectId }),
   },
 };

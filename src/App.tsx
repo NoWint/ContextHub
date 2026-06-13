@@ -5,6 +5,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { ProjectView } from "./pages/ProjectView";
 import { AnalysisView } from "./pages/AnalysisView";
 import { ExportView } from "./pages/ExportView";
+import { VersionDiff } from "./pages/VersionDiff";
 import { Settings } from "./pages/Settings";
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
               <Route path="/project/:id" element={<ProjectView />} />
               <Route path="/project/:id/analysis" element={<AnalysisView />} />
               <Route path="/project/:id/export" element={<ExportView />} />
+              <Route path="/project/:id/diff" element={<VersionDiff />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

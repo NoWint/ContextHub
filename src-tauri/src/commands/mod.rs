@@ -4,3 +4,4 @@ pub mod analysis;
 pub mod compression;
 pub mod export;
 pub mod settings;
+pub mod watcher;
