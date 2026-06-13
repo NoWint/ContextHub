@@ -2,71 +2,166 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { useAppStore } from "../lib/store";
 import { FileTree } from "../components/FileTree";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Cpu,
+  Sparkles,
+  FileText,
+  ArrowRight,
+  Download,
+  BarChart3,
+  Loader2,
+} from "lucide-react";
 
 export function ProjectView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { projects, currentProject, selectProject, files, analysis, analyzeProject, loading } = useAppStore();
+  const { projects, currentProject, selectProject, files, analysis, analyzeProject, loadProjectData, loadingAnalysis } = useAppStore();
 
   useEffect(() => {
-    const project = projects.find((p) => p.id === id);
-    if (project) selectProject(project);
-  }, [id, projects]);
+    if (!id) return;
+    if (currentProject?.id !== id) {
+      const project = projects.find((p) => p.id === id);
+      if (project) {
+        selectProject(project);
+        loadProjectData(project.id);
+      }
+    }
+  }, [id]);
 
-  if (!currentProject) return <div className="p-8">Project not found</div>;
+  if (!currentProject) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Project not found</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">{currentProject.name}</h2>
-        <div className="flex gap-3">
-          <button
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">{currentProject.name}</h2>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {currentProject.source_type} &middot; {currentProject.source_path}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
             onClick={() => analyzeProject(false)}
-            disabled={loading}
-            className="px-4 py-2 bg-zinc-800 rounded-md hover:bg-zinc-700 text-sm"
+            disabled={loadingAnalysis}
+            className="gap-1.5"
           >
+            {loadingAnalysis ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Cpu className="h-3.5 w-3.5" />
+            )}
             Analyze (Local)
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => analyzeProject(true)}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-500 text-sm"
+            disabled={loadingAnalysis}
+            className="gap-1.5"
           >
+            {loadingAnalysis ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
             Analyze (Local + LLM)
-          </button>
+          </Button>
         </div>
       </div>
 
       {analysis && (
-        <div className="mb-6 p-4 bg-zinc-900 rounded-lg">
-          <h3 className="font-semibold mb-2">Analysis v{analysis.version}</h3>
-          {analysis.overview && <p className="text-sm text-zinc-300 mb-2">{analysis.overview}</p>}
-          <button
-            onClick={() => navigate(`/project/${id}/analysis`)}
-            className="text-sm text-blue-400 hover:underline"
-          >
-            View full analysis
-          </button>
-        </div>
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                Analysis Summary
+              </CardTitle>
+              <Badge variant="secondary">v{analysis.version}</Badge>
+            </div>
+            {analysis.overview && (
+              <CardDescription className="line-clamp-2">
+                {analysis.overview}
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/project/${id}/analysis`)}
+              className="gap-1.5 -ml-2"
+            >
+              View full analysis
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <h3 className="font-semibold mb-3">Files ({files.length})</h3>
-          <FileTree files={files} />
-        </div>
-        <div>
-          <h3 className="font-semibold mb-3">Actions</h3>
-          <div className="space-y-2">
-            <button
-              onClick={() => navigate(`/project/${id}/export`)}
-              className="w-full px-4 py-3 bg-zinc-800 rounded-md hover:bg-zinc-700 text-sm text-left"
-            >
-              Export Context
-            </button>
-          </div>
-        </div>
-      </div>
+      <Tabs defaultValue="files" className="w-full">
+        <TabsList>
+          <TabsTrigger value="files" className="gap-1.5">
+            <FileText className="h-3.5 w-3.5" />
+            Files
+          </TabsTrigger>
+          <TabsTrigger value="actions" className="gap-1.5">
+            <Download className="h-3.5 w-3.5" />
+            Actions
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="files">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">
+                Project Files
+                <Badge variant="secondary" className="ml-2">{files.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FileTree files={files} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="actions">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Export & Actions</CardTitle>
+              <CardDescription>
+                Export your project context for AI tools
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/project/${id}/export`)}
+                className="w-full justify-start gap-2 h-11"
+              >
+                <Download className="h-4 w-4" />
+                Export Context
+                <ArrowRight className="h-3.5 w-3.5 ml-auto" />
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -20,7 +20,11 @@ interface AppState {
   compressedContext: CompressedContext | null;
   exportResult: ExportRecord | null;
   llmConfigs: LlmConfig[];
-  loading: boolean;
+  loadingProjects: boolean;
+  loadingAnalysis: boolean;
+  loadingCompression: boolean;
+  loadingExport: boolean;
+  loadingIngestion: boolean;
   error: string | null;
 
   loadProjects: () => Promise<void>;
@@ -40,6 +44,7 @@ interface AppState {
     isDefault: boolean
   ) => Promise<void>;
   deleteLlmConfig: (configId: string) => Promise<void>;
+  loadProjectData: (projectId: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -51,16 +56,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   compressedContext: null,
   exportResult: null,
   llmConfigs: [],
-  loading: false,
+  loadingProjects: false,
+  loadingAnalysis: false,
+  loadingCompression: false,
+  loadingExport: false,
+  loadingIngestion: false,
   error: null,
 
   loadProjects: async () => {
-    set({ loading: true, error: null });
+    set({ loadingProjects: true, error: null });
     try {
       const projects = await api.project.list();
-      set({ projects, loading: false });
+      set({ projects, loadingProjects: false });
     } catch (e) {
-      set({ error: String(e), loading: false });
+      set({ error: String(e), loadingProjects: false });
     }
   },
 
@@ -74,13 +83,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   createProject: async (name, sourceType, sourcePath) => {
-    set({ loading: true, error: null });
+    set({ loadingProjects: true, error: null });
     try {
       const project = await api.project.create(name, sourceType, sourcePath);
-      set((s) => ({ projects: [project, ...s.projects], loading: false }));
+      set((s) => ({ projects: [project, ...s.projects], loadingProjects: false }));
       return project;
     } catch (e) {
-      set({ error: String(e), loading: false });
+      set({ error: String(e), loadingProjects: false });
       throw e;
     }
   },
@@ -100,43 +109,43 @@ export const useAppStore = create<AppState>((set, get) => ({
   ingestProject: async (source) => {
     const { currentProject } = get();
     if (!currentProject) return;
-    set({ loading: true, error: null });
+    set({ loadingIngestion: true, error: null });
     try {
       const files = await api.ingestion.ingest(currentProject.id, source);
-      set({ files, loading: false });
+      set({ files, loadingIngestion: false });
     } catch (e) {
-      set({ error: String(e), loading: false });
+      set({ error: String(e), loadingIngestion: false });
     }
   },
 
   analyzeProject: async (useLlm) => {
     const { currentProject } = get();
     if (!currentProject) return;
-    set({ loading: true, error: null });
+    set({ loadingAnalysis: true, error: null });
     try {
       const analysis = await api.analysis.analyze(currentProject.id, useLlm);
-      set({ analysis, loading: false });
+      set({ analysis, loadingAnalysis: false });
     } catch (e) {
-      set({ error: String(e), loading: false });
+      set({ error: String(e), loadingAnalysis: false });
     }
   },
 
   compressProject: async (level) => {
     const { currentProject } = get();
     if (!currentProject) return;
-    set({ loading: true, error: null });
+    set({ loadingCompression: true, error: null });
     try {
       const compressedContext = await api.compression.compress(currentProject.id, level);
-      set({ compressedContext, loading: false });
+      set({ compressedContext, loadingCompression: false });
     } catch (e) {
-      set({ error: String(e), loading: false });
+      set({ error: String(e), loadingCompression: false });
     }
   },
 
   exportProject: async (format, compression) => {
     const { currentProject } = get();
     if (!currentProject) return;
-    set({ loading: true, error: null });
+    set({ loadingExport: true, error: null });
     try {
       const exportResult = await api.export.exportContext(
         currentProject.id,
@@ -144,9 +153,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         format,
         compression
       );
-      set({ exportResult, loading: false });
+      set({ exportResult, loadingExport: false });
     } catch (e) {
-      set({ error: String(e), loading: false });
+      set({ error: String(e), loadingExport: false });
     }
   },
 
@@ -174,6 +183,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((s) => ({ llmConfigs: s.llmConfigs.filter((c) => c.id !== configId) }));
     } catch (e) {
       set({ error: String(e) });
+    }
+  },
+
+  loadProjectData: async (projectId) => {
+    set({ loadingProjects: true, error: null });
+    try {
+      const [files, analysis] = await Promise.all([
+        api.project.getFiles(projectId),
+        api.project.getAnalysis(projectId),
+      ]);
+      set({ files, analysis, loadingProjects: false });
+    } catch (e) {
+      set({ error: String(e), loadingProjects: false });
     }
   },
 

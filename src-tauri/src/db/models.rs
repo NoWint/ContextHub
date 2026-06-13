@@ -50,6 +50,7 @@ pub struct Export {
 pub struct LlmConfig {
     pub id: String,
     pub provider: String,
+    #[serde(skip_serializing)]
     pub api_key: Option<String>,
     pub endpoint: Option<String>,
     pub model: String,

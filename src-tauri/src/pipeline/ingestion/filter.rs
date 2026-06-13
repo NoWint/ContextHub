@@ -12,7 +12,7 @@ const BUILTIN_IGNORE_PATTERNS: &[&str] = &[
     "__pycache__",
     ".venv",
     "venv",
-    ".env",
+    "/.env",
     ".DS_Store",
     "*.lock",
     "package-lock.json",

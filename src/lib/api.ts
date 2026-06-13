@@ -73,6 +73,10 @@ export const api = {
       invoke("create_project", { name, sourceType: source_type, sourcePath: source_path }),
     delete: (projectId: string): Promise<void> =>
       invoke("delete_project", { projectId }),
+    getFiles: (projectId: string): Promise<FileEntry[]> =>
+      invoke("get_project_files", { projectId }),
+    getAnalysis: (projectId: string): Promise<Analysis | null> =>
+      invoke("get_project_analysis", { projectId }),
   },
   ingestion: {
     ingest: (projectId: string, source: ProjectSource): Promise<FileEntry[]> =>

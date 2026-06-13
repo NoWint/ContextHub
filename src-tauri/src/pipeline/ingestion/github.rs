@@ -2,6 +2,7 @@ use crate::db::models::ProjectSource;
 use crate::pipeline::ingestion::local_folder::LocalFolderIngestion;
 use crate::pipeline::traits::{IngestionAdapter, RawProject};
 use std::process::Command;
+use tempfile::TempDir;
 
 pub struct GitHubIngestion;
 
@@ -12,10 +13,7 @@ impl IngestionAdapter for GitHubIngestion {
             _ => anyhow::bail!("GitHubIngestion only handles GitHubRepo source"),
         };
 
-        let temp_dir = std::env::temp_dir().join(format!("contexthub-{}", project_id));
-        if temp_dir.exists() {
-            std::fs::remove_dir_all(&temp_dir)?;
-        }
+        let temp_dir = TempDir::new()?;
 
         let mut cmd = Command::new("git");
         cmd.arg("clone");
@@ -24,7 +22,7 @@ impl IngestionAdapter for GitHubIngestion {
             cmd.arg("--branch").arg(b);
         }
         cmd.arg(&url);
-        cmd.arg(&temp_dir);
+        cmd.arg(temp_dir.path());
 
         let status = cmd.status()?;
         if !status.success() {
@@ -32,12 +30,13 @@ impl IngestionAdapter for GitHubIngestion {
         }
 
         let local_source = ProjectSource::LocalFolder {
-            path: temp_dir.to_string_lossy().to_string(),
+            path: temp_dir.path().to_string_lossy().to_string(),
         };
         let local_ingestion = LocalFolderIngestion;
         let result = local_ingestion.ingest(local_source, project_id)?;
 
-        let _ = std::fs::remove_dir_all(&temp_dir);
+        // temp_dir is cleaned up automatically when dropped
+        drop(temp_dir);
 
         Ok(result)
     }

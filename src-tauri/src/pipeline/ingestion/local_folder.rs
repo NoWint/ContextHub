@@ -7,6 +7,22 @@ use std::path::Path;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+const BINARY_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg", "webp",
+    "woff", "woff2", "ttf", "otf", "eot",
+    "mp3", "mp4", "avi", "mov", "wmv", "flv", "webm",
+    "zip", "tar", "gz", "bz2", "xz", "7z", "rar",
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+    "exe", "dll", "so", "dylib", "bin", "dat",
+    "pyc", "pyo", "class", "o", "obj",
+    "sqlite", "db",
+];
+
+fn is_binary_extension(ext: &str) -> bool {
+    let ext_lower = ext.to_lowercase();
+    BINARY_EXTENSIONS.contains(&ext_lower.as_str())
+}
+
 pub struct LocalFolderIngestion;
 
 impl IngestionAdapter for LocalFolderIngestion {
@@ -26,7 +42,21 @@ impl IngestionAdapter for LocalFolderIngestion {
 
         let language_map = build_language_map();
 
-        for entry in WalkDir::new(root_path).into_iter().filter_map(|e| e.ok()) {
+        for entry in WalkDir::new(root_path)
+            .into_iter()
+            .filter_entry(|e| {
+                if e.path().is_dir() {
+                    let relative = e.path().strip_prefix(root_path).ok();
+                    match relative {
+                        Some(rel) => filter.should_include(rel, true),
+                        None => true,
+                    }
+                } else {
+                    true
+                }
+            })
+            .filter_map(|e| e.ok())
+        {
             let path = entry.path();
             if path.is_dir() {
                 continue;
@@ -38,6 +68,13 @@ impl IngestionAdapter for LocalFolderIngestion {
             if !filter.should_include(&relative, false) {
                 continue;
             }
+
+            // Skip binary files by extension
+            let ext = relative.extension().and_then(|e| e.to_str()).unwrap_or("");
+            if is_binary_extension(ext) {
+                continue;
+            }
+
             let metadata = match fs::metadata(path) {
                 Ok(m) => m,
                 Err(_) => continue,

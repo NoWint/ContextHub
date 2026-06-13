@@ -39,6 +39,8 @@ pub fn run() {
             commands::project::list_projects,
             commands::project::create_project,
             commands::project::delete_project,
+            commands::project::get_project_files,
+            commands::project::get_project_analysis,
             commands::ingestion::ingest_project,
             commands::analysis::analyze_project,
             commands::compression::compress_project,

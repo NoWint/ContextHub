@@ -11,6 +11,20 @@ struct LlmRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum LlmRequestBody {
+    OpenAi(LlmRequest),
+    Anthropic(AnthropicRequest),
+}
+
+#[derive(Debug, Serialize)]
+struct AnthropicRequest {
+    model: String,
+    messages: Vec<Message>,
+    max_tokens: u32,
+}
+
+#[derive(Debug, Serialize)]
 struct Message {
     role: String,
     content: String,
@@ -37,6 +51,23 @@ struct Usage {
     total_tokens: u32,
 }
 
+#[derive(Debug, Deserialize)]
+struct AnthropicResponse {
+    content: Vec<AnthropicContentBlock>,
+    usage: AnthropicUsage,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicContentBlock {
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicUsage {
+    input_tokens: u32,
+    output_tokens: u32,
+}
+
 pub fn refine_with_llm(
     raw: &RawProject,
     local_result: &LocalAnalysisResult,
@@ -56,32 +87,62 @@ pub fn refine_with_llm(
 
     let client = reqwest::blocking::Client::new();
 
-    let request = LlmRequest {
-        model: config.model.clone(),
-        messages: vec![Message {
-            role: "user".to_string(),
-            content: prompt,
-        }],
-        max_tokens: 2000,
+    let content = if config.provider == "claude" {
+        let request = AnthropicRequest {
+            model: config.model.clone(),
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: prompt,
+            }],
+            max_tokens: 2000,
+        };
+
+        let response = client
+            .post(endpoint)
+            .header("x-api-key", &api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("LLM API error: {}", response.status());
+        }
+
+        let anthropic_response: AnthropicResponse = response.json()?;
+        anthropic_response
+            .content
+            .first()
+            .map(|b| b.text.clone())
+            .unwrap_or_default()
+    } else {
+        let request = LlmRequest {
+            model: config.model.clone(),
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: prompt,
+            }],
+            max_tokens: 2000,
+        };
+
+        let response = client
+            .post(endpoint)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("LLM API error: {}", response.status());
+        }
+
+        let llm_response: LlmResponse = response.json()?;
+        llm_response
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default()
     };
-
-    let response = client
-        .post(endpoint)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&request)
-        .send()?;
-
-    if !response.status().is_success() {
-        anyhow::bail!("LLM API error: {}", response.status());
-    }
-
-    let llm_response: LlmResponse = response.json()?;
-    let content = llm_response
-        .choices
-        .first()
-        .map(|c| c.message.content.clone())
-        .unwrap_or_default();
 
     let (overview, architecture, decisions) = parse_llm_response(&content);
 
@@ -150,10 +211,10 @@ DECISIONS:
 }
 
 fn truncate(s: &str, max_chars: usize) -> String {
-    if s.len() <= max_chars {
+    if s.chars().count() <= max_chars {
         s.to_string()
     } else {
-        format!("{}... (truncated)", &s[..max_chars])
+        format!("{}... (truncated)", s.chars().take(max_chars).collect::<String>())
     }
 }
 
@@ -166,21 +227,54 @@ fn parse_llm_response(content: &str) -> (String, String, String) {
 
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("OVERVIEW:") {
+        let trimmed_upper = trimmed.to_uppercase();
+
+        if trimmed_upper.starts_with("OVERVIEW:")
+            || trimmed_upper.starts_with("## OVERVIEW")
+            || trimmed.starts_with("**OVERVIEW")
+        {
             current_section = "overview";
+            // Append any text after the marker on the same line
+            let rest = extract_text_after_marker(trimmed, "OVERVIEW");
+            if !rest.is_empty() {
+                if !overview.is_empty() {
+                    overview.push('\n');
+                }
+                overview.push_str(rest);
+            }
             continue;
-        } else if trimmed.starts_with("ARCHITECTURE:") {
+        } else if trimmed_upper.starts_with("ARCHITECTURE:")
+            || trimmed_upper.starts_with("## ARCHITECTURE")
+            || trimmed.starts_with("**ARCHITECTURE")
+        {
             current_section = "architecture";
+            let rest = extract_text_after_marker(trimmed, "ARCHITECTURE");
+            if !rest.is_empty() {
+                if !architecture.is_empty() {
+                    architecture.push('\n');
+                }
+                architecture.push_str(rest);
+            }
             continue;
-        } else if trimmed.starts_with("DECISIONS:") {
+        } else if trimmed_upper.starts_with("DECISIONS:")
+            || trimmed_upper.starts_with("## DECISIONS")
+            || trimmed.starts_with("**DECISIONS")
+        {
             current_section = "decisions";
+            let rest = extract_text_after_marker(trimmed, "DECISIONS");
+            if !rest.is_empty() {
+                if !decisions.is_empty() {
+                    decisions.push('\n');
+                }
+                decisions.push_str(rest);
+            }
             continue;
         }
 
         match current_section {
             "overview" => {
                 if !overview.is_empty() {
-                    overview.push(' ');
+                    overview.push('\n');
                 }
                 overview.push_str(trimmed);
             }
@@ -201,4 +295,18 @@ fn parse_llm_response(content: &str) -> (String, String, String) {
     }
 
     (overview, architecture, decisions)
+}
+
+fn extract_text_after_marker<'a>(line: &'a str, marker: &str) -> &'a str {
+    let upper = line.to_uppercase();
+    if let Some(pos) = upper.find(marker) {
+        let after = &line[pos + marker.len()..];
+        let rest = after.trim_start_matches(|c: char| c == ':' || c == '*' || c == '#' || c == ' ');
+        if rest.is_empty() {
+            return "";
+        }
+        rest
+    } else {
+        ""
+    }
 }
